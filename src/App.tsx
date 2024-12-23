@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { Mesh, TextureLoader } from "three";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { Stats, OrbitControls, Sky } from "@react-three/drei";
+import { Physics, useBox, usePlane, useSphere } from "@react-three/cannon";
 // import "./styles.css";
 
 function Box(props) {
@@ -48,12 +49,47 @@ const Course = () => {
 
   // courseRef.current.rotateOnAxis([1, 2], 45);
 
+  const [ref] = usePlane(
+    () => ({
+      rotation: [-Math.PI / 2, 0, 0], // Rotate to lie flat
+      position: [0, -10, 0], // Ground position
+      material: { friction: 1 },
+    }),
+    useRef<Mesh>(null)
+  );
+
   const texture = useLoader(TextureLoader, "/grass.png");
 
   return (
-    <mesh position={[0, -5, 0]} rotation={[Math.PI / 2, 0, 0]}>
-      <planeGeometry args={[10, 20]} />
+    <mesh ref={ref} receiveShadow>
+      <planeGeometry args={[40, 80]} />
       <meshStandardMaterial side={2} map={texture} />
+    </mesh>
+  );
+};
+
+const GolfBall = () => {
+  const [ref, api] = useSphere(
+    () => ({
+      mass: 1, // Ball reacts to gravity
+      position: [0, 10, 0], // Initial position
+      args: [0.2], // Radius of the ball
+      restitution: 0.1, // Makes the ball bouncy
+      material: { friction: 0.8 },
+      linearDamping: 0.3, // Slows translational motion (straight line motion)
+      angularDamping: 0.5, // Slows rotational motion
+    }),
+    useRef<Mesh>(null)
+  );
+
+  const hitBall = () => {
+    api.applyImpulse([0, 15, 9], [0, 0, 0]);
+  };
+
+  return (
+    <mesh ref={ref} onClick={() => hitBall()} receiveShadow>
+      <sphereGeometry args={[0.2, 20, 20]} />
+      <meshStandardMaterial color={"white"} />
     </mesh>
   );
 };
@@ -78,9 +114,12 @@ export const App = () => {
         intensity={Math.PI}
       /> */}
 
-      <Box position={[-1.2, 0, 0]} />
-      <Box position={[1.2, 0, 0]} />
-      <Course />
+      <Physics gravity={[0, -9.8, 0]}>
+        <Box position={[-1.2, 0, 0]} />
+        <Box position={[1.2, 0, 0]} />
+        <GolfBall />
+        <Course />
+      </Physics>
       <OrbitControls />
       <Stats />
       <axesHelper args={[5]} />
