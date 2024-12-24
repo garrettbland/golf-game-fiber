@@ -2,40 +2,65 @@ import { useRef, useState, useEffect } from "react";
 import { Mesh, TextureLoader, Vector3 } from "three";
 import { Canvas, useFrame, useLoader } from "@react-three/fiber";
 import { Stats, OrbitControls, Sky } from "@react-three/drei";
-import {
-  Physics,
-  useBox,
-  usePlane,
-  useSphere,
-  Debug,
-} from "@react-three/cannon";
+import { Physics, useBox, useSphere, Debug } from "@react-three/cannon";
 import { FlagStick } from "./flag";
-// import "./styles.css";
+import { create } from "zustand";
 
-function Box(props) {
-  // This reference will give us direct access to the mesh
-  const meshRef = useRef();
-  // Set up state for the hovered and active state
-  const [hovered, setHover] = useState(false);
-  const [active, setActive] = useState(false);
-  // Subscribe this component to the render-loop, rotate the mesh every frame
-  useFrame((state, delta) => (meshRef.current.rotation.x += delta));
-  // Return view, these are regular three.js elements expressed in JSX
-  return (
-    <mesh
-      {...props}
-      ref={meshRef}
-      scale={active ? 1.5 : 1}
-      onClick={(event) => setActive(!active)}
-      onPointerOver={(event) => setHover(true)}
-      onPointerOut={(event) => setHover(false)}
-      castShadow
-    >
-      <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial color={hovered ? "hotpink" : "orange"} />
-    </mesh>
-  );
-}
+// Step 1: Create a zustand store
+const useStore = create((set) => ({
+  ballPosition: [0, -9, 0],
+  windSpeed: 0.4,
+  windDirection: new Vector3(0, 0, 0),
+  backSpin: 0,
+  sideSpin: 0,
+  rotationalSpin: 0, // rotational direction of golf ball
+  setWindSpeed: (speed: number) => {
+    console.log(`setting wind speed to ${speed}`);
+    set({ windSpeed: speed });
+  },
+  setWindDirection: (direction: Vector3) => {
+    console.log(`Setting wind direction to ${direction.x}/${direction.y}`);
+    set({ windDirection: direction });
+  },
+  setBackSpin: (speed: number) => {
+    set({ backSpin: speed });
+  },
+  setSideSpin: (speed: number) => {
+    set({ sideSpin: speed });
+  },
+  resetBall: () => {
+    console.log("resetting...");
+    set({ ballPosition: [0, -9, 0] });
+  },
+  setBallPosition: (position: [number, number, number]) => {
+    set({ ballPosition: position });
+  },
+}));
+
+// function Box(props) {
+//   // This reference will give us direct access to the mesh
+//   const meshRef = useRef();
+//   // Set up state for the hovered and active state
+//   const [hovered, setHover] = useState(false);
+//   const [active, setActive] = useState(false);
+//   // Subscribe this component to the render-loop, rotate the mesh every frame
+//   useFrame((state, delta) => (meshRef.current.rotation.x += delta));
+//   // Return view, these are regular three.js elements expressed in JSX
+//   return (
+//     <mesh
+//       {...props}
+//       ref={meshRef}
+//       scale={active ? 1.5 : 1}
+//       onClick={(event) => setActive(!active)}
+//       onPointerOver={(event) => setHover(true)}
+//       onPointerOut={(event) => setHover(false)}
+//       castShadow
+//     >
+//       <boxGeometry args={[1, 1, 1]} />
+//       <meshStandardMaterial color={hovered ? "hotpink" : "orange"} />
+//     </mesh>
+//   );
+// }
 
 const Sun = () => {
   return (
@@ -81,11 +106,14 @@ const Course = () => {
 
 const GolfBall = () => {
   const [hasHit, setHasHit] = useState(false);
+  const setSideSpin = useStore((state) => state.setSideSpin);
+  const setBackSpin = useStore((state) => state.setBackSpin);
+  const ballPosition = useStore((state) => state.ballPosition);
 
   const [ref, api] = useSphere(
     () => ({
       mass: 1, // Ball reacts to gravity
-      position: [0, 10, 0], // Initial position
+      position: ballPosition, // Initial position
       args: [1], // Radius of the ball
       restitution: 0.3, // Makes the ball bouncy
       material: { friction: 0.8 },
@@ -99,6 +127,14 @@ const GolfBall = () => {
   const linearVelocity = useRef(new Vector3()); // motion
   const angularVelocity = useRef(new Vector3()); // spin
 
+  useEffect(() => {
+    console.log("ball position changed!");
+    api.position.set(ballPosition[0], ballPosition[1], ballPosition[2]);
+    api.velocity.set(0, 0, 0);
+    api.angularVelocity.set(0, 0, 0);
+    setHasHit(false);
+  }, [ballPosition]);
+
   // Subscribe to the velocity and angularVelocity once
   useEffect(() => {
     console.log("setting velocity...");
@@ -108,6 +144,8 @@ const GolfBall = () => {
     });
     const unsubscribeAngular = api.angularVelocity.subscribe((w) => {
       angularVelocity.current = new Vector3(w[0], w[1], w[2]);
+      setSideSpin(angularVelocity.current.y.toFixed(2));
+      setBackSpin(angularVelocity.current.x.toFixed(2));
     });
 
     // Cleanup the subscription when the component unmounts
@@ -119,15 +157,6 @@ const GolfBall = () => {
 
   useFrame(() => {
     if (!hasHit) return;
-
-    // console.log(`ang velocity ${JSON.stringify(angularVelocity.current)}`);
-
-    // const linearVelocity = new Vector3();
-    // const angularVelocity = new Vector3();
-
-    // // Get the ball's linear and angular velocity
-    // api.velocity.subscribe((v) => linearVelocity.set(v[0], v[1], v[2]));
-    // api.angularVelocity.subscribe((v) => angularVelocity.set(v[0], v[1], v[2]));
 
     // Magnus effect parameters
     const ballRadius = 0.2; // Radius of the ball
@@ -155,8 +184,10 @@ const GolfBall = () => {
     // if (linearVelocity.length() === 0 || angularVelocity.length() === 0) return;
 
     // Apply the Magnus force to the ball
+    const crossWind = -0;
+    const linearWind = 0;
     api.applyForce(
-      [magnusForce.x, magnusForce.y, magnusForce.x],
+      [magnusForce.x + crossWind, magnusForce.y, magnusForce.x + linearWind],
       [0, 0, 0] // Apply at the ball's center
     );
 
@@ -178,20 +209,7 @@ const GolfBall = () => {
     // Apply angular velocity for rotation
     api.angularVelocity.set(backspin, sideSpin, 0); // Spins around the axis (side rotation)
 
-    console.log({ angular: angularVelocity.current });
-    console.log({ linear: linearVelocity.current });
-    const magnusForce = new Vector3().crossVectors(
-      angularVelocity.current,
-      linearVelocity.current
-    );
-
-    console.log({ magnusForce });
-
     setHasHit(true);
-    // api.applyForce(
-    //   [50, 0, 0],
-    //   [0, 0, 0] // Apply at the ball's center
-    // );
   };
 
   return (
@@ -203,9 +221,41 @@ const GolfBall = () => {
   );
 };
 
+const DevTools = () => {
+  const windSpeed = useStore((state) => state.windSpeed);
+  const windDirection = useStore((state) => state.windDirection);
+  const sideSpin = useStore((state) => state.sideSpin);
+  const backSpin = useStore((state) => state.backSpin);
+  const setBallPosition = useStore((state) => state.setBallPosition);
+  const resetBall = useStore((state) => state.resetBall);
+  return (
+    <div
+      style={{
+        zIndex: 999,
+        position: "fixed",
+        top: 0,
+        right: 0,
+        background: "white",
+        padding: 2,
+      }}
+    >
+      <span>Wind Speed: {windSpeed}</span>
+      <br />
+      <span>Wind Direction: {windDirection}</span>
+      <br />
+      <span>Side Speed: {sideSpin}</span>
+      <br />
+      <span>Back Spin: {backSpin}</span>
+      <br />
+      <button onClick={() => resetBall()}>Reset Ball</button>
+    </div>
+  );
+};
+
 export const App = () => {
   return (
     <>
+      <DevTools />
       <Canvas style={{ width: "100%", height: "100%" }} shadows>
         <Sky
           distance={450000} // Distance of the sky sphere
@@ -228,8 +278,8 @@ export const App = () => {
 
         <Physics gravity={[0, -9.8, 0]}>
           <Debug>
-            <Box position={[-1.2, 0, 0]} />
-            <Box position={[1.2, 0, 0]} />
+            {/* <Box position={[-1.2, 0, 0]} />
+            <Box position={[1.2, 0, 0]} /> */}
             <GolfBall />
             <Course />
           </Debug>
