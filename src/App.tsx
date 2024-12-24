@@ -96,8 +96,8 @@ const GolfBall = () => {
   );
 
   // Use state to store velocities
-  const linearVelocity = useRef(new Vector3());
-  const angularVelocity = useRef(new Vector3());
+  const linearVelocity = useRef(new Vector3()); // motion
+  const angularVelocity = useRef(new Vector3()); // spin
 
   // Subscribe to the velocity and angularVelocity once
   useEffect(() => {
@@ -115,7 +115,7 @@ const GolfBall = () => {
       unsubscribeLinear();
       unsubscribeAngular();
     };
-  }, [api.velocity]);
+  }, [api.velocity, api.angularVelocity]);
 
   useFrame(() => {
     if (!hasHit) return;
@@ -137,13 +137,15 @@ const GolfBall = () => {
     // Compute Magnus force
     const magnusForce = new Vector3()
       .crossVectors(angularVelocity.current, linearVelocity.current)
-      .multiplyScalar(
-        liftCoefficient *
-          airDensity *
-          Math.PI *
-          Math.pow(ballRadius, 3) *
-          linearVelocity.current.length()
-      );
+      .multiplyScalar(liftCoefficient * airDensity * Math.pow(ballRadius, 3));
+
+    // .multiplyScalar(
+    //   liftCoefficient *
+    //     airDensity *
+    //     Math.PI *
+    //     Math.pow(ballRadius, 3) *
+    //     linearVelocity.current.length()
+    // );
 
     // Get the ball's linear and angular velocity
     // api.velocity.get((v) => linearVelocity.set(v[0], v[1], v[2]));
@@ -153,20 +155,38 @@ const GolfBall = () => {
     // if (linearVelocity.length() === 0 || angularVelocity.length() === 0) return;
 
     // Apply the Magnus force to the ball
-    // api.applyForce(
-    //   [magnusForce.x, magnusForce.y, magnusForce.z],
-    //   [0, 0, 0] // Apply at the ball's center
-    // );
+    api.applyForce(
+      [magnusForce.x, magnusForce.y, magnusForce.x],
+      [0, 0, 0] // Apply at the ball's center
+    );
 
     // console.log(`Apply ${magnusForce.x} force`);
   });
 
   const hitBall = () => {
+    console.log("happening...");
+
+    const launchDirection = -2;
+    const backspin = -100;
+    const launchAngle = 8;
+    const ballSpeed = 8;
+    const sideSpin = 60;
+
     // initial direction
-    api.applyImpulse([0, 8, 8], [0, 0, 0]);
+    api.applyImpulse([launchDirection, launchAngle, ballSpeed], [0, 0, 0]);
 
     // Apply angular velocity for rotation
-    api.angularVelocity.set(0, 100, 0); // Spins around the axis (side rotation)
+    api.angularVelocity.set(backspin, sideSpin, 0); // Spins around the axis (side rotation)
+
+    console.log({ angular: angularVelocity.current });
+    console.log({ linear: linearVelocity.current });
+    const magnusForce = new Vector3().crossVectors(
+      angularVelocity.current,
+      linearVelocity.current
+    );
+
+    console.log({ magnusForce });
+
     setHasHit(true);
     // api.applyForce(
     //   [50, 0, 0],
