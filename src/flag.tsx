@@ -1,9 +1,44 @@
 import { DoubleSide, THREE } from "three";
+import { useRef } from "react";
+import {
+  Physics,
+  RigidBody,
+  Debug,
+  RigidBodyProps,
+  RapierRigidBody,
+  CuboidCollider,
+  CylinderCollider,
+} from "@react-three/rapier";
+import { useStore } from "./App";
 
 /**
  * Mesh standard material gets shadows and stuff
  * Mesh basic material doesn't get shadows
  */
+
+const Hole = ({ onBallInHole }: { onBallInHole: () => void }) => {
+  return (
+    <>
+      <mesh position={[0, -5.2, 0]} receiveShadow>
+        {/* Invisible cylinder representing the hole */}
+        <cylinderGeometry args={[2, 2, 1, 32]} />
+        <meshStandardMaterial color={"black"} opacity={1} />
+      </mesh>
+      <CylinderCollider
+        sensor // Makes it a sensor (only detects overlaps, no physics interaction)
+        onIntersectionEnter={(event) => {
+          console.log(event);
+          console.log("HERERE");
+          // event.other
+          // event.other.rigidBodyObject?.name === "ball"
+          onBallInHole(); // Trigger callback when ball enters
+        }}
+        position={[0, -5.5, 0]}
+        args={[1, 2]}
+      />
+    </>
+  );
+};
 
 const Flag = () => {
   /**
@@ -39,11 +74,16 @@ const Flag = () => {
 };
 
 export const FlagStick = (props) => {
+  const setBallInHole = useStore((state) => state.setBallInHole);
+
   return (
-    <mesh {...props} receiveShadow wireframe>
-      <cylinderGeometry args={[0.1, 0.1, 10, 10]} />
-      <meshStandardMaterial color="white" />
-      <Flag />
-    </mesh>
+    <RigidBody colliders="hull" includeInvisible type="fixed">
+      <mesh {...props} receiveShadow>
+        <cylinderGeometry args={[0.1, 0.1, 10, 10]} />
+        <meshStandardMaterial color="white" />
+        <Flag />
+        <Hole onBallInHole={() => setBallInHole(true)} />
+      </mesh>
+    </RigidBody>
   );
 };
